@@ -72,7 +72,6 @@ router.post('/', async (req, res) => {
     }
 });
 
-
 // Ruta para modificar un tipo de uva existente
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
@@ -154,6 +153,81 @@ router.get('/:id', async (req, res) => {
     } catch (error) {
         console.error('Error al obtener el tipo de uva:', error);
         res.status(500).send('Error al obtener el tipo de uva');
+    }
+});
+
+// Obtener tipos de uva y parcelas asociadas
+router.get('/', async (req, res) => {
+    try {
+        const pool = await connectWithConnector('vino_costero_negocio');
+        const client = await pool.connect();
+
+        // Obtener todos los tipos de uva
+        const tiposUvaResult = await client.query(
+            `SELECT tu.id_tipo_uva, tu.nombre_uva, tu.descripcion_uva, 
+                    tu.requisito_ph_tierra, tu.requisito_condiciones_humedad, 
+                    tu.requisito_condiciones_temperatura, tu.tiempo_cosecha
+             FROM tipos_uvas tu`
+        );
+        const tiposUva = tiposUvaResult.rows;
+
+        // Para cada tipo de uva, obtener las parcelas asociadas
+        const tiposUvaDetalles = await Promise.all(tiposUva.map(async (uva) => {
+            // Obtener las parcelas donde se ha sembrado este tipo de uva
+            const parcelasResult = await client.query(
+                `SELECT p.id_parcela, p.nombre_parcela, 
+                        dp.superficie, dp.longitud, dp.anchura, dp.pendiente,
+                        s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra, 
+                        ct.ph_tierra, ct.condiciones_humedad, ct.condiciones_temperatura, ct.observaciones AS observaciones_control
+                 FROM parcelas p
+                 JOIN siembras s ON p.id_parcela = s.id_parcela
+                 LEFT JOIN dimensiones_parcelas dp ON p.id_parcela = dp.id_parcela
+                 LEFT JOIN controles_tierra ct ON p.id_parcela = ct.id_parcela
+                 WHERE s.id_tipo_uva = $1
+                 ORDER BY ct.fecha_creacion DESC LIMIT 1`,
+                [uva.id_tipo_uva]
+            );
+
+            const parcelas = parcelasResult.rows;
+
+            return {
+                id: uva.id_tipo_uva,
+                nombre: uva.nombre_uva,
+                descripcion: uva.descripcion_uva,
+                ph_requerido: uva.requisito_ph_tierra,
+                humedad_requerida: uva.requisito_condiciones_humedad,
+                temperatura_requerida: uva.requisito_condiciones_temperatura,
+                tiempoCosecha: uva.tiempo_cosecha,
+                parcelas: parcelas.map((parcela) => ({
+                    id: parcela.id_parcela,
+                    nombre: parcela.nombre_parcela,
+                    dimensiones: {
+                        superficie: parcela.superficie,
+                        longitud: parcela.longitud,
+                        anchura: parcela.anchura,
+                        pendiente: parcela.pendiente,
+                    },
+                    siembraActual: {
+                        cantidad_plantas: parcela.cantidad_plantas,
+                        tecnica_siembra: parcela.tecnica_siembra,
+                        observaciones: parcela.observaciones_siembra,
+                    },
+                    controlTierra: {
+                        ph: parcela.ph_tierra,
+                        humedad: parcela.condiciones_humedad,
+                        temperatura: parcela.condiciones_temperatura,
+                        observaciones: parcela.observaciones_control,
+                    },
+                })),
+            };
+        }));
+
+        client.release();
+
+        res.status(200).json(tiposUvaDetalles);
+    } catch (error) {
+        console.error('Error al obtener los tipos de uva:', error);
+        res.status(500).send('Error al obtener los tipos de uva');
     }
 });
 

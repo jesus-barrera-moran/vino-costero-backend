@@ -73,18 +73,18 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Ruta para ver los detalles de una parcela
-router.get('/:id', verificarToken, verificarRol([1,4]), async (req, res) => {
+// Obtener los detalles de una parcela por ID
+router.get('/:id', /*verificarToken, verificarRol([1,4]),*/ async (req, res) => {
     const { id } = req.params;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Obtener los detalles de la parcela y sus dimensiones
+        // Obtener la parcela por ID
         const parcelaResult = await client.query(
-            `SELECT p.nombre_parcela, p.ubicacion_geografica, ep.nombre_estado, 
-                    dp.superficie, dp.longitud, dp.anchura, dp.pendiente 
+            `SELECT p.id_parcela, p.nombre_parcela, p.ubicacion_descripcion, p.ubicacion_latitud, p.ubicacion_longitud, ep.nombre_estado,
+                    dp.superficie, dp.longitud, dp.anchura, dp.pendiente
              FROM parcelas p
              LEFT JOIN estados_parcelas ep ON p.id_estado_parcela = ep.id_estado_parcela
              LEFT JOIN dimensiones_parcelas dp ON p.id_parcela = dp.id_parcela
@@ -92,63 +92,65 @@ router.get('/:id', verificarToken, verificarRol([1,4]), async (req, res) => {
             [id]
         );
 
-        if (parcelaResult.rows.length === 0) {
-            return res.status(404).send('Parcela no encontrada');
+        const parcela = parcelaResult.rows[0];
+
+        if (!parcela) {
+            return res.status(404).json({ error: 'Parcela no encontrada' });
         }
 
-        const dimensionesResult = await client.query(
-            `SELECT superficie
-             FROM dimensiones_parcelas 
-             WHERE id_parcela = $1`,
-            [id]
-        );
-
-        // Obtener las siembras asociadas y el tipo de uva plantada
-        const siembrasResult = await client.query(
-            `SELECT s.cantidad_plantas, tu.nombre_uva 
+        // Obtener la siembra activa (si existe)
+        const siembraResult = await client.query(
+            `SELECT s.cantidad_plantas, tu.nombre_uva, s.tecnica_siembra, s.observaciones_siembra, es.nombre_estado AS estado_siembra
              FROM siembras s
-             JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
-             WHERE s.id_parcela = $1`,
+             LEFT JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
+             LEFT JOIN estados_siembras es ON s.id_estado_siembra = es.id_estado_siembra
+             WHERE s.id_parcela = $1
+             ORDER BY s.fecha_creacion DESC LIMIT 1`,
             [id]
         );
 
-        // Obtener el último control de tierra
-        const controlResult = await client.query(
-            `SELECT fecha_creacion, ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones
-             FROM controles_tierra 
-             WHERE id_parcela = $1
-             ORDER BY fecha_creacion DESC LIMIT 1`,
-            [id]
-        );
-
-        // Calcular el porcentaje plantado de la parcela
-        const cantidadPlantasTotal = siembrasResult.rows.reduce((sum, siembra) => sum + siembra.cantidad_plantas, 0);
-        const superficieParcela = dimensionesResult.rows[0]?.superficie || 0;
-        const porcentajePlantado = (cantidadPlantasTotal / superficieParcela) * 100;
+        const siembraActiva = siembraResult.rows[0] || null;
 
         client.release();
 
         res.status(200).json({
-            parcela: dimensionesResult.rows[0],
-            siembras: siembrasResult.rows,
-            ultimo_control: controlResult.rows[0],
-            porcentaje_plantado: `${porcentajePlantado.toFixed(2)}%`
+            id: parcela.id_parcela,
+            nombre: parcela.nombre_parcela,
+            longitud: parcela.ubicacion_longitud,
+            latitud: parcela.ubicacion_latitud,
+            ubicacion: parcela.ubicacion_descripcion,
+            estado: parcela.nombre_estado,
+            dimensiones: {
+                superficie: parcela.superficie,
+                longitud: parcela.longitud,
+                anchura: parcela.anchura,
+                pendiente: parcela.pendiente,
+            },
+            siembra_activa: siembraActiva
+                ? {
+                    tipoUva: siembraActiva.nombre_uva,
+                    cantidadPlantas: siembraActiva.cantidad_plantas,
+                    tecnica: siembraActiva.tecnica_siembra,
+                    observaciones: siembraActiva.observaciones_siembra,
+                    estado: siembraActiva.estado_siembra,
+                }
+                : null,
         });
     } catch (error) {
-        console.error('Error al obtener los detalles de la parcela:', error);
+        console.error('Error al obtener la parcela por ID:', error);
         res.status(500).send('Error al obtener los detalles de la parcela');
     }
 });
 
-// Ruta para obtener todas las parcelas
+// Obtener todas las parcelas con sus detalles
 router.get('/', async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Obtener todas las parcelas con sus dimensiones
+        // Obtener todas las parcelas con estado y dimensiones
         const parcelasResult = await client.query(
-            `SELECT p.id_parcela, p.nombre_parcela, p.ubicacion_geografica, ep.nombre_estado, 
+            `SELECT p.id_parcela, p.nombre_parcela, p.ubicacion_descripcion, p.ubicacion_latitud, p.ubicacion_longitud, ep.nombre_estado, 
                     dp.superficie, dp.longitud, dp.anchura, dp.pendiente
              FROM parcelas p
              LEFT JOIN estados_parcelas ep ON p.id_estado_parcela = ep.id_estado_parcela
@@ -157,36 +159,64 @@ router.get('/', async (req, res) => {
 
         const parcelas = parcelasResult.rows;
 
-        // Recorrer cada parcela para obtener la información adicional
+        // Para cada parcela, obtener siembras y control de tierra
         const parcelasDetalles = await Promise.all(parcelas.map(async (parcela) => {
-            // Obtener las siembras asociadas y el tipo de uva plantada
+            // Obtener la siembra activa, si existe
             const siembrasResult = await client.query(
-                `SELECT s.cantidad_plantas, tu.nombre_uva 
+                `SELECT s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra, es.nombre_estado AS estado_siembra, 
+                        tu.nombre_uva, s.fecha_plantacion
                  FROM siembras s
-                 JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
-                 WHERE s.id_parcela = $1`,
+                 LEFT JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
+                 LEFT JOIN estados_siembras es ON s.id_estado_siembra = es.id_estado_siembra
+                 WHERE s.id_parcela = $1 AND s.id_estado_siembra = 1
+                 ORDER BY s.fecha_creacion DESC LIMIT 1`,
                 [parcela.id_parcela]
             );
 
-            // Obtener el último control de tierra
+            const siembraActiva = siembrasResult.rows[0] || null;
+
+            // Obtener el último control de tierra, si existe
             const controlResult = await client.query(
-                `SELECT fecha_creacion, ph_tierra, condiciones_humedad, condiciones_temperatura 
-                 FROM controles_tierra 
+                `SELECT ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones, fecha_creacion
+                 FROM controles_tierra
                  WHERE id_parcela = $1
                  ORDER BY fecha_creacion DESC LIMIT 1`,
                 [parcela.id_parcela]
             );
 
-            // Calcular el porcentaje plantado de la parcela
-            const cantidadPlantasTotal = siembrasResult.rows.reduce((sum, siembra) => sum + siembra.cantidad_plantas, 0);
-            const superficieParcela = parcela.superficie || 0;
-            const porcentajePlantado = (cantidadPlantasTotal / superficieParcela) * 100;
+            const controlTierra = controlResult.rows[0] || null;
 
             return {
-                parcela,
-                siembras: siembrasResult.rows,
-                ultimo_control: controlResult.rows[0] || 'No se encontraron controles de tierra',
-                porcentaje_plantado: `${porcentajePlantado.toFixed(2)}%`
+                id: parcela.id_parcela,
+                nombre: parcela.nombre_parcela,
+                longitud: parcela.ubicacion_longitud,
+                latitud: parcela.ubicacion_latitud,
+                ubicacion: parcela.ubicacion_descripcion,
+                estado: parcela.nombre_estado,
+                dimensiones: {
+                    superficie: parcela.superficie,
+                    longitud: parcela.longitud,
+                    anchura: parcela.anchura,
+                    pendiente: parcela.pendiente,
+                },
+                siembra_activa: siembraActiva
+                    ? {
+                        tipo_uva: siembraActiva.nombre_uva,
+                        fecha_plantacion: siembraActiva.fecha_plantacion,
+                        cantidad_plantas: siembraActiva.cantidad_plantas,
+                        tecnica: siembraActiva.tecnica_siembra,
+                        observaciones: siembraActiva.observaciones_siembra,
+                        estado: siembraActiva.estado_siembra,
+                    }
+                    : 'No hay siembra activa',
+                control_tierra: controlTierra
+                    ? {
+                        ph: controlTierra.ph_tierra,
+                        humedad: controlTierra.condiciones_humedad,
+                        temperatura: controlTierra.condiciones_temperatura,
+                        observaciones: controlTierra.observaciones,
+                    }
+                    : 'No se encontraron controles de tierra',
             };
         }));
 

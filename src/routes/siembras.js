@@ -134,4 +134,72 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// Obtener siembras actuales e historial de cada parcela
+router.get('/', async (req, res) => {
+    try {
+        const pool = await connectWithConnector('vino_costero_negocio');
+        const client = await pool.connect();
+
+        // Obtener todas las parcelas
+        const parcelasResult = await client.query(
+            `SELECT p.id_parcela, p.nombre_parcela
+             FROM parcelas p`
+        );
+        const parcelas = parcelasResult.rows;
+
+        // Para cada parcela, obtener la siembra actual y el historial de siembras
+        const parcelasDetalles = await Promise.all(parcelas.map(async (parcela) => {
+            // Obtener la siembra actual (la más reciente) de la parcela
+            const siembraActualResult = await client.query(
+                `SELECT tu.nombre_uva, s.fecha_creacion, s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra
+                 FROM siembras s
+                 LEFT JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
+                 WHERE s.id_parcela = $1
+                 ORDER BY s.fecha_creacion DESC LIMIT 1`,
+                [parcela.id_parcela]
+            );
+            const siembraActual = siembraActualResult.rows[0] || null;
+
+            // Obtener el historial completo de siembras de la parcela
+            const historialSiembrasResult = await client.query(
+                `SELECT tu.nombre_uva, s.fecha_creacion, s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra
+                 FROM siembras s
+                 LEFT JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
+                 WHERE s.id_parcela = $1
+                 ORDER BY s.fecha_creacion DESC`,
+                [parcela.id_parcela]
+            );
+            const historialSiembras = historialSiembrasResult.rows;
+
+            return {
+                id: parcela.id_parcela,
+                nombre: parcela.nombre_parcela,
+                siembraActual: siembraActual
+                    ? {
+                        tipoUva: siembraActual.nombre_uva,
+                        fechaCreacion: siembraActual.fecha_creacion,
+                        cantidadPlantas: siembraActual.cantidad_plantas,
+                        tecnica: siembraActual.tecnica_siembra,
+                        observaciones: siembraActual.observaciones_siembra,
+                    }
+                    : 'No hay siembra actual',
+                historialSiembras: historialSiembras.map((siembra) => ({
+                    tipoUva: siembra.nombre_uva,
+                    fechaCreacion: siembra.fecha_creacion,
+                    cantidadPlantas: siembra.cantidad_plantas,
+                    tecnica: siembra.tecnica_siembra,
+                    observaciones: siembra.observaciones_siembra,
+                })),
+            };
+        }));
+
+        client.release();
+
+        res.status(200).json(parcelasDetalles);
+    } catch (error) {
+        console.error('Error al obtener las siembras:', error);
+        res.status(500).send('Error al obtener las siembras');
+    }
+});
+
 module.exports = router;
