@@ -17,7 +17,7 @@ app.use('/auth', authRoutes);
 app.use('/parcelas', parcelasRoutes);
 
 // Usar las rutas de dimensiones
-app.use('/dimensiones', dimensionesRoutes);
+app.use('/parcelas', dimensionesRoutes);
 
 // Usar las rutas de controles de tierra
 app.use('/controlesTierra', controlesTierraRoutes);

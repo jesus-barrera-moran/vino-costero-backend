@@ -3,8 +3,9 @@ const router = express.Router();
 const { connectWithConnector } = require('../database/connector'); // Ajusta el path si es necesario
 
 // Ruta para registrar dimensiones para una parcela
-router.post('/', async (req, res) => {
-    const { id_parcela, superficie, longitud, anchura, pendiente } = req.body;
+router.post('/:id_parcela/dimensiones', async (req, res) => {
+    const { id_parcela } = req.params;
+    const { superficie, longitud, anchura, pendiente } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
@@ -19,6 +20,7 @@ router.post('/', async (req, res) => {
         );
 
         if (siembrasActivas.rows[0].count > 0) {
+            client.release();
             return res.status(400).send('La parcela tiene siembras activas. No se pueden registrar nuevas dimensiones.');
         }
 
@@ -30,7 +32,13 @@ router.post('/', async (req, res) => {
         );
 
         client.release();
-        res.status(201).send('Dimensiones registradas exitosamente');
+        res.status(201).send({ 
+            id_parcela,
+            superficie,
+            longitud,
+            anchura,
+            pendiente,
+         });
     } catch (error) {
         console.error('Error al registrar dimensiones:', error);
         res.status(500).send('Error al registrar dimensiones');
