@@ -139,3 +139,74 @@ exports.register = async (req, res) => {
     res.status(500).send('Error al crear el usuario');
   }
 };
+
+// Endpoint para actualizar un usuario existente
+exports.register = async (req, res) => {
+  const { id } = req.params; // ID del usuario a actualizar
+  const { rol, habilitado } = req.body; // Datos a actualizar (roles y habilitado)
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+
+    // Iniciar transacción
+    await client.query('BEGIN');
+
+    // Verificar si el usuario existe
+    const usuarioExiste = await client.query(
+      `SELECT * 
+       FROM usuarios 
+       WHERE id_usuario = $1`,
+      [id]
+    );
+
+    if (usuarioExiste.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Actualizar el estado del usuario (habilitado/deshabilitado)
+    await client.query(
+      `UPDATE usuarios 
+       SET habilitado = $1 
+       WHERE id_usuario = $2`,
+      [habilitado, id]
+    );
+
+    // Obtener el ID del rol desde el nombre del rol
+    const rolResult = await client.query(
+      `SELECT id_rol 
+       FROM roles 
+       WHERE nombre = $1`,
+      [rol]
+    );
+
+    if (rolResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(400).json({ error: 'Rol no válido' });
+    }
+
+    const idRol = rolResult.rows[0].id_rol;
+
+    // Actualizar la relación usuario-rol en la tabla "usuario_roles"
+    await client.query(
+      `UPDATE usuario_roles 
+       SET id_rol = $1 
+       WHERE id_usuario = $2`,
+      [idRol, id]
+    );
+
+    // Confirmar la transacción
+    await client.query('COMMIT');
+    client.release();
+
+    return res.status(200).json({ mensaje: 'Usuario actualizado exitosamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar el usuario:', error);
+    await client.query('ROLLBACK');
+    res.status(500).send('Error al actualizar el usuario');
+  }
+};

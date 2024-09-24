@@ -5,7 +5,7 @@ const { verificarToken, verificarRol } = require('../middlewares/authMiddleware'
 
 // Ruta para crear una nueva parcela
 router.post('/', async (req, res) => {
-    const { nombre_parcela, ubicacion_geografica, id_estado_parcela, superficie, longitud, anchura, pendiente, ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones } = req.body;
+    const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, dimensiones, control_tierra } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
@@ -16,9 +16,9 @@ router.post('/', async (req, res) => {
 
         // Crear la parcela
         const parcelaResult = await client.query(
-            `INSERT INTO parcelas (nombre_parcela, ubicacion_geografica, id_estado_parcela, fecha_creacion) 
-             VALUES ($1, $2, $3, NOW()) RETURNING id_parcela`,
-            [nombre_parcela, ubicacion_geografica, id_estado_parcela]
+            `INSERT INTO parcelas (nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, fecha_creacion) 
+             VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id_parcela`,
+            [nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela]
         );
         const id_parcela = parcelaResult.rows[0].id_parcela;
 
@@ -26,14 +26,14 @@ router.post('/', async (req, res) => {
         await client.query(
             `INSERT INTO dimensiones_parcelas (id_parcela, superficie, longitud, anchura, pendiente, fecha_creacion) 
              VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [id_parcela, superficie, longitud, anchura, pendiente]
+             [id_parcela, dimensiones.superficie, dimensiones.longitud, dimensiones.anchura, dimensiones.pendiente]
         );
 
         // Crear el primer control de tierra
         await client.query(
             `INSERT INTO controles_tierra (id_parcela, ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones, fecha_creacion) 
              VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [id_parcela, ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones]
+            [id_parcela, control_tierra.ph, control_tierra.humedad, control_tierra.temperatura, control_tierra.observaciones]
         );
 
         // Confirmar la transacción
@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
 // Ruta para modificar una parcela existente
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { nombre_parcela, ubicacion_geografica, id_estado_parcela } = req.body;
+    const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
@@ -60,9 +60,9 @@ router.put('/:id', async (req, res) => {
         // Actualizar los datos de la parcela
         await client.query(
             `UPDATE parcelas 
-             SET nombre_parcela = $1, ubicacion_geografica = $2, id_estado_parcela = $3 
-             WHERE id_parcela = $4`,
-            [nombre_parcela, ubicacion_geografica, id_estado_parcela, id]
+             SET nombre_parcela = $1, ubicacion_descripcion = $2, ubicacion_longitud = $3, ubicacion_latitud = $4, id_estado_parcela = $5
+             WHERE id_parcela = $6`,
+            [nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, id]
         );
 
         client.release();

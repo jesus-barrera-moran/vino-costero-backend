@@ -4,7 +4,7 @@ const { connectWithConnector } = require('../database/connector');
 
 // Ruta para registrar una nueva siembra en una parcela
 router.post('/', async (req, res) => {
-    const { id_parcela, id_tipo_uva, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
+    const { id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
@@ -42,15 +42,15 @@ router.post('/', async (req, res) => {
             [id_parcela]
         );
 
-        if (controlesTierraResult.rows[0].total > 0) {
+        if (controlesTierraResult.rows[0].total = 0) {
             return res.status(400).send('No se puede registrar la siembra. La parcela no tiene controles de tierra.');
         }
 
         // Registrar la nueva siembra
         await client.query(
-            `INSERT INTO siembras (id_parcela, id_tipo_uva, cantidad_plantas, tecnica_siembra, observaciones_siembra, fecha_creacion) 
-             VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [id_parcela, id_tipo_uva, cantidad_plantas, tecnica_siembra, observaciones_siembra]
+            `INSERT INTO siembras (id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra, fecha_creacion) 
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+            [id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra]
         );
 
         client.release();
@@ -67,7 +67,7 @@ router.post('/', async (req, res) => {
 // Ruta para modificar una siembra existente
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
+    const { fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
@@ -76,9 +76,9 @@ router.put('/:id', async (req, res) => {
         // Actualizar los datos de la siembra
         await client.query(
             `UPDATE siembras 
-             SET cantidad_plantas = $1, tecnica_siembra = $2, observaciones_siembra = $3 
-             WHERE id_siembra = $4`,
-            [cantidad_plantas, tecnica_siembra, observaciones_siembra, id]
+             SET cantidad_plantas = $1, tecnica_siembra = $2, observaciones_siembra = $3, fecha_plantacion = $4 
+             WHERE id_siembra = $5`,
+            [cantidad_plantas, tecnica_siembra, observaciones_siembra, fecha_plantacion, id]
         );
 
         client.release();
@@ -89,7 +89,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Ruta para ver los detalles de una siembra
+// Ruta para obtener una siembra por ID
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
@@ -97,40 +97,44 @@ router.get('/:id', async (req, res) => {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Obtener los detalles de la siembra
+        // Consultar siembra por ID
         const siembraResult = await client.query(
-            `SELECT s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra, tu.nombre_uva, 
-                    p.nombre_parcela, p.ubicacion_geografica, dp.superficie, dp.longitud, dp.anchura, dp.pendiente
+            `SELECT s.id_siembra, s.id_parcela, tu.nombre_uva, es.nombre_estado AS estado, 
+                    s.fecha_plantacion, s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra
              FROM siembras s
-             JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
-             JOIN parcelas p ON s.id_parcela = p.id_parcela
-             LEFT JOIN dimensiones_parcelas dp ON p.id_parcela = dp.id_parcela
+             JOIN estados_siembras es ON s.id_estado_siembra = es.id_estado_siembra
+             LEFT JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
              WHERE s.id_siembra = $1`,
             [id]
         );
 
+        // Si no se encuentra la siembra, devolver un error
         if (siembraResult.rows.length === 0) {
-            return res.status(404).send('Siembra no encontrada');
+            return res.status(404).json({ error: 'Siembra no encontrada' });
         }
 
-        // Obtener el último control de tierra
-        const controlResult = await client.query(
-            `SELECT fecha_creacion, ph_tierra, condiciones_humedad, condiciones_temperatura 
-             FROM controles_tierra 
-             WHERE id_parcela = $1
-             ORDER BY fecha_creacion DESC LIMIT 1`,
-            [siembraResult.rows[0].id_parcela]
-        );
+        // Obtener el resultado de la consulta
+        const siembra = siembraResult.rows[0];
+
+        // Estructura de la respuesta
+        const siembraData = {
+            id: siembra.id_siembra,
+            id_parcela: siembra.id_parcela,
+            tipo_uva: siembra.nombre_uva || 'Sin asignar',
+            estado: siembra.estado,
+            fecha_plantacion: siembra.fecha_plantacion,
+            cantidad_plantas: siembra.cantidad_plantas,
+            tecnica_siembra: siembra.tecnica_siembra,
+            observaciones_siembra: siembra.observaciones_siembra || 'Sin observaciones',
+        };
 
         client.release();
 
-        res.status(200).json({
-            siembra: siembraResult.rows[0],
-            ultimo_control: controlResult.rows[0] || 'No se encontraron controles de tierra'
-        });
+        // Enviar la siembra como respuesta
+        res.status(200).json(siembraData);
     } catch (error) {
-        console.error('Error al obtener los detalles de la siembra:', error);
-        res.status(500).send('Error al obtener los detalles de la siembra');
+        console.error('Error al obtener la siembra por ID:', error);
+        res.status(500).json({ error: 'Error al obtener la siembra' });
     }
 });
 
