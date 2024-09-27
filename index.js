@@ -7,6 +7,15 @@ const controlesTierraRoutes = require('./src/routes/controlesTierra');
 const tiposUvasRoutes = require('./src/routes/tiposUvas');
 const siembrasRoutes = require('./src/routes/siembras');
 
+const cors = require('cors');
+
+// Configurar CORS para permitir solicitudes del frontend
+app.use(cors({
+    origin: 'http://localhost:3001', // Cambia esto al puerto donde corre tu frontend
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+}));
+
 // Middleware para analizar JSON
 app.use(express.json());
 

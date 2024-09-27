@@ -148,13 +148,17 @@ router.get('/', async (req, res) => {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Obtener todas las parcelas con estado y dimensiones
+        // Obtener todas las parcelas con estado y dimensiones (seleccionando solo las más recientes)
         const parcelasResult = await client.query(
             `SELECT p.id_parcela, p.nombre_parcela, p.ubicacion_descripcion, p.ubicacion_latitud, p.ubicacion_longitud, ep.nombre_estado, 
                     dp.superficie, dp.longitud, dp.anchura, dp.pendiente
              FROM parcelas p
              LEFT JOIN estados_parcelas ep ON p.id_estado_parcela = ep.id_estado_parcela
-             LEFT JOIN dimensiones_parcelas dp ON p.id_parcela = dp.id_parcela`
+             LEFT JOIN (
+               SELECT DISTINCT ON (id_parcela) id_parcela, superficie, longitud, anchura, pendiente
+               FROM dimensiones_parcelas
+               ORDER BY id_parcela, fecha_creacion DESC  -- Selecciona la dimensión más reciente por parcela
+             ) dp ON p.id_parcela = dp.id_parcela`
         );
 
         const parcelas = parcelasResult.rows;
@@ -208,7 +212,7 @@ router.get('/', async (req, res) => {
                         observaciones: siembraActiva.observaciones_siembra,
                         estado: siembraActiva.estado_siembra,
                     }
-                    : 'No hay siembra activa',
+                    : null,
                 control_tierra: controlTierra
                     ? {
                         ph: controlTierra.ph_tierra,
