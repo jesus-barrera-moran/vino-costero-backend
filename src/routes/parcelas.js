@@ -256,7 +256,7 @@ router.get('/', async (req, res) => {
                         temperatura: controlTierra.condiciones_temperatura,
                         observaciones: controlTierra.observaciones,
                     }
-                    : 'No se encontraron controles de tierra',
+                    : null,
             };
         }));
 

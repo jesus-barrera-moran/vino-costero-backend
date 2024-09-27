@@ -3,8 +3,9 @@ const router = express.Router();
 const { connectWithConnector } = require('../database/connector');
 
 // Ruta para registrar un nuevo control de tierra
-router.post('/', async (req, res) => {
-    const { id_parcela, ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones } = req.body;
+router.post('/:id_parcela', async (req, res) => {
+    const { id_parcela } = req.params;
+    const { ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
