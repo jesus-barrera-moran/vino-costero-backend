@@ -123,7 +123,8 @@ router.get('/:id', /*verificarToken, verificarRol([1,4]),*/ async (req, res) => 
              FROM parcelas p
              LEFT JOIN estados_parcelas ep ON p.id_estado_parcela = ep.id_estado_parcela
              LEFT JOIN dimensiones_parcelas dp ON p.id_parcela = dp.id_parcela
-             WHERE p.id_parcela = $1`,
+             WHERE p.id_parcela = $1
+             ORDER BY dp.fecha_creacion DESC LIMIT 1`,
             [id]
         );
 

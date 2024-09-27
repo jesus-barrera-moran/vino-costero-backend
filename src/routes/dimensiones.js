@@ -103,4 +103,51 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Ruta para actualizar (crear un nuevo registro) las dimensiones de una parcela
+router.put('/:id_parcela', async (req, res) => {
+    const { id_parcela } = req.params;
+    const { superficie, longitud, anchura, pendiente } = req.body;
+
+    try {
+        const pool = await connectWithConnector('vino_costero_negocio');
+        const client = await pool.connect();
+
+        // Verificar si la parcela tiene siembras activas
+        const siembrasActivas = await client.query(
+            `SELECT COUNT(*) 
+             FROM siembras 
+             WHERE id_parcela = $1 AND id_estado_siembra = 1`, // Siembra activa
+            [id_parcela]
+        );
+
+        if (siembrasActivas.rows[0].count > 0) {
+            client.release();
+            return res.status(400).send('La parcela tiene siembras activas. No se pueden registrar nuevas dimensiones.');
+        }
+
+        // Insertar el nuevo registro de dimensiones
+        const insertDimensionQuery = `
+            INSERT INTO dimensiones_parcelas (id_parcela, superficie, longitud, anchura, pendiente, fecha_creacion) 
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            RETURNING id_dimension_parcela, fecha_creacion;
+        `;
+        const result = await client.query(insertDimensionQuery, [id_parcela, superficie, longitud, anchura, pendiente]);
+
+        client.release();
+
+        // Responder con los detalles de la nueva dimensión creada
+        res.status(201).json({
+            id_parcela,
+            superficie,
+            longitud,
+            anchura,
+            pendiente,
+            fecha_creacion: result.rows[0].fecha_creacion,
+        });
+    } catch (error) {
+        console.error('Error al registrar las nuevas dimensiones:', error);
+        res.status(500).send('Error al registrar las nuevas dimensiones.');
+    }
+});
+
 module.exports = router;
