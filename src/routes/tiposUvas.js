@@ -85,34 +85,6 @@ router.put('/:id', async (req, res) => {
             [nombre, descripcion, ph, humedad, temperatura, tiempoCosecha, id]
         );
 
-        // Actualizar las siembras correspondientes, si hay parcelas seleccionadas
-        if (parcelas && parcelas.length > 0) {
-            await Promise.all(parcelas.map(async (idParcela) => {
-                // Verificar si la parcela tiene una siembra activa sin tipo de uva asignado (id_tipo_uva IS NULL)
-                const siembraActivaResult = await client.query(
-                    `SELECT id_siembra 
-                     FROM siembras 
-                     WHERE id_parcela = $1 AND id_estado_siembra = 1 AND id_tipo_uva IS NULL`,
-                    [idParcela]
-                );
-
-                const siembraActiva = siembraActivaResult.rows[0];
-
-                // Si la siembra activa existe y no tiene tipo de uva asignado, actualizarla con el tipo de uva
-                if (siembraActiva) {
-                    await client.query(
-                        `UPDATE siembras 
-                         SET id_tipo_uva = $1 
-                         WHERE id_siembra = $2`,
-                        [id, siembraActiva.id_siembra]
-                    );
-                } else {
-                    // Si la parcela no cumple con las condiciones, devolver un error
-                    throw new Error(`La parcela ${idParcela} no tiene una siembra activa sin tipo de uva asignado.`);
-                }
-            }));
-        }
-
         // Confirmar la transacción
         await client.query('COMMIT');
         client.release();
@@ -155,14 +127,14 @@ router.get('/:id', async (req, res) => {
 
         // Obtener las parcelas donde está plantada esta uva
         const parcelasResult = await client.query(
-            `SELECT p.id_parcela 
+            `SELECT p.nombre_parcela 
              FROM siembras s
              JOIN parcelas p ON s.id_parcela = p.id_parcela
              WHERE s.id_tipo_uva = $1`,
             [id]
         );
 
-        const parcelas = parcelasResult.rows.map(parcela => parcela.id_parcela);
+        const parcelas = parcelasResult.rows.map(parcela => parcela.nombre_parcela);
 
         client.release();
 
