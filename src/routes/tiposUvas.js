@@ -23,31 +23,33 @@ router.post('/', async (req, res) => {
 
         const idTipoUva = result.rows[0].id_tipo_uva;
 
-        // Asignar el nuevo tipo de uva a las parcelas seleccionadas
-        await Promise.all(parcelas.map(async (idParcela) => {
-            // Verificar si la parcela tiene una siembra activa sin tipo de uva asignado (id_tipo_uva IS NULL)
-            const siembraActivaResult = await client.query(
-                `SELECT id_siembra 
-                 FROM siembras 
-                 WHERE id_parcela = $1 AND id_estado_siembra = 1 AND id_tipo_uva IS NULL`,
-                [idParcela]
-            );
-
-            const siembraActiva = siembraActivaResult.rows[0];
-
-            // Si la siembra activa existe y no tiene tipo de uva asignado, actualizarla con el nuevo tipo de uva
-            if (siembraActiva) {
-                await client.query(
-                    `UPDATE siembras 
-                     SET id_tipo_uva = $1 
-                     WHERE id_siembra = $2`,
-                    [idTipoUva, siembraActiva.id_siembra]
+        if (parcelas && parcelas.length > 0) {
+            // Asignar el nuevo tipo de uva a las parcelas seleccionadas
+            await Promise.all(parcelas.map(async (idParcela) => {
+                // Verificar si la parcela tiene una siembra activa sin tipo de uva asignado (id_tipo_uva IS NULL)
+                const siembraActivaResult = await client.query(
+                    `SELECT id_siembra 
+                     FROM siembras 
+                     WHERE id_parcela = $1 AND id_estado_siembra = 1 AND id_tipo_uva IS NULL`,
+                    [idParcela]
                 );
-            } else {
-                // Si la parcela no cumple con las condiciones, devolver un error
-                throw new Error(`La parcela ${idParcela} no tiene una siembra activa sin tipo de uva asignado.`);
-            }
-        }));
+    
+                const siembraActiva = siembraActivaResult.rows[0];
+    
+                // Si la siembra activa existe y no tiene tipo de uva asignado, actualizarla con el nuevo tipo de uva
+                if (siembraActiva) {
+                    await client.query(
+                        `UPDATE siembras 
+                         SET id_tipo_uva = $1 
+                         WHERE id_siembra = $2`,
+                        [idTipoUva, siembraActiva.id_siembra]
+                    );
+                } else {
+                    // Si la parcela no cumple con las condiciones, devolver un error
+                    throw new Error(`La parcela ${idParcela} no tiene una siembra activa sin tipo de uva asignado.`);
+                }
+            }));
+        }
 
         // Si todo es exitoso, confirmamos la transacción
         await client.query('COMMIT');

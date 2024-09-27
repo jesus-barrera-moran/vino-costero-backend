@@ -48,8 +48,8 @@ router.post('/', async (req, res) => {
 
         // Registrar la nueva siembra
         await client.query(
-            `INSERT INTO siembras (id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra, fecha_creacion) 
-             VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+            `INSERT INTO siembras (id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra, id_estado_siembra, fecha_creacion) 
+             VALUES ($1, $2, $3, $4, $5, $6, 1, NOW())`,
             [id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra]
         );
 
@@ -89,28 +89,31 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// Ruta para obtener una siembra por ID
-router.get('/:id', async (req, res) => {
-    const { id } = req.params;
+// Ruta para obtener la última siembra activa por ID de parcela
+router.get('/:id_parcela', async (req, res) => {
+    const { id_parcela } = req.params;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Consultar siembra por ID
+        // Consultar la última siembra activa por ID de parcela
         const siembraResult = await client.query(
             `SELECT s.id_siembra, s.id_parcela, tu.nombre_uva, es.nombre_estado AS estado, 
                     s.fecha_plantacion, s.cantidad_plantas, s.tecnica_siembra, s.observaciones_siembra
              FROM siembras s
              JOIN estados_siembras es ON s.id_estado_siembra = es.id_estado_siembra
              LEFT JOIN tipos_uvas tu ON s.id_tipo_uva = tu.id_tipo_uva
-             WHERE s.id_siembra = $1`,
-            [id]
+             WHERE s.id_parcela = $1
+               AND es.nombre_estado = 'Activo' -- Filtrar solo las siembras con estado activo
+             ORDER BY s.fecha_creacion DESC
+             LIMIT 1`, // Selecciona la siembra más reciente (última siembra activa)
+            [id_parcela]
         );
 
-        // Si no se encuentra la siembra, devolver un error
+        // Si no se encuentra ninguna siembra activa, devolver un error
         if (siembraResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Siembra no encontrada' });
+            return res.status(404).json({ error: 'No se encontró ninguna siembra activa para esta parcela' });
         }
 
         // Obtener el resultado de la consulta
@@ -133,21 +136,22 @@ router.get('/:id', async (req, res) => {
         // Enviar la siembra como respuesta
         res.status(200).json(siembraData);
     } catch (error) {
-        console.error('Error al obtener la siembra por ID:', error);
+        console.error('Error al obtener la última siembra activa por ID de parcela:', error);
         res.status(500).json({ error: 'Error al obtener la siembra' });
     }
 });
 
-// Obtener siembras actuales e historial de cada parcela
+// Obtener solo parcelas con siembras actuales o historial de siembras
 router.get('/', async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Obtener todas las parcelas
+        // Obtener solo parcelas que tengan siembras registradas
         const parcelasResult = await client.query(
-            `SELECT p.id_parcela, p.nombre_parcela
-             FROM parcelas p`
+            `SELECT DISTINCT p.id_parcela, p.nombre_parcela
+             FROM parcelas p
+             JOIN siembras s ON p.id_parcela = s.id_parcela`
         );
         const parcelas = parcelasResult.rows;
 
@@ -186,7 +190,7 @@ router.get('/', async (req, res) => {
                         tecnica: siembraActual.tecnica_siembra,
                         observaciones: siembraActual.observaciones_siembra,
                     }
-                    : 'No hay siembra actual',
+                    : null,
                 historialSiembras: historialSiembras.map((siembra) => ({
                     tipoUva: siembra.nombre_uva,
                     fechaCreacion: siembra.fecha_creacion,
