@@ -51,11 +51,14 @@ router.post('/', async (req, res) => {
 // Ruta para modificar una parcela existente
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela } = req.body;
+    const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, dimensiones } = req.body;
 
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
+
+        // Iniciar la transacción
+        await client.query('BEGIN');
 
         // Actualizar los datos de la parcela
         await client.query(
@@ -65,11 +68,23 @@ router.put('/:id', async (req, res) => {
             [nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, id]
         );
 
+        // Actualizar los datos de las dimensiones de la parcela
+        await client.query(
+            `UPDATE dimensiones_parcelas
+             SET superficie = $1, longitud = $2, anchura = $3, pendiente = $4
+             WHERE id_parcela = $5`,
+            [dimensiones.superficie, dimensiones.longitud, dimensiones.anchura, dimensiones.pendiente, id]
+        );
+
+        // Confirmar la transacción
+        await client.query('COMMIT');
+
         client.release();
-        res.status(200).send('Parcela actualizada exitosamente');
+        res.status(200).send('Parcela y dimensiones actualizadas exitosamente');
     } catch (error) {
-        console.error('Error al modificar la parcela:', error);
-        res.status(500).send('Error al modificar la parcela');
+        console.error('Error al modificar la parcela y las dimensiones:', error);
+        await client.query('ROLLBACK'); // En caso de error, hacer rollback
+        res.status(500).send('Error al modificar la parcela y las dimensiones');
     }
 });
 
