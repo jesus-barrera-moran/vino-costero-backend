@@ -3,7 +3,7 @@ const router = express.Router();
 const { connectWithConnector } = require('../database/connector'); // Ajusta el path si es necesario
 
 // Ruta para registrar dimensiones para una parcela
-router.post('/:id_parcela/dimensiones', async (req, res) => {
+router.post('/:id_parcela', async (req, res) => {
     const { id_parcela } = req.params;
     const { superficie, longitud, anchura, pendiente } = req.body;
 
@@ -51,17 +51,13 @@ router.get('/', async (req, res) => {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
-        // Obtener todas las parcelas con las dimensiones actuales (la más reciente por cada parcela)
+        // Obtener las dimensiones actuales (la más reciente por cada parcela)
         const parcelasResult = await client.query(
-            `SELECT p.id_parcela, p.nombre_parcela, 
+            `SELECT DISTINCT ON (p.id_parcela) p.id_parcela, p.nombre_parcela, 
                     dp.superficie, dp.longitud, dp.anchura, dp.pendiente, dp.fecha_creacion
              FROM parcelas p
              JOIN dimensiones_parcelas dp ON p.id_parcela = dp.id_parcela
-             WHERE dp.fecha_creacion = (
-                SELECT MAX(dp2.fecha_creacion)
-                FROM dimensiones_parcelas dp2
-                WHERE dp2.id_parcela = dp.id_parcela
-             )`
+             ORDER BY p.id_parcela, dp.fecha_creacion DESC`
         );
 
         const parcelas = parcelasResult.rows;

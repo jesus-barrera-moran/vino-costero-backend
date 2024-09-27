@@ -68,18 +68,38 @@ router.put('/:id', async (req, res) => {
             [nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, id]
         );
 
-        // Actualizar los datos de las dimensiones de la parcela
-        await client.query(
-            `UPDATE dimensiones_parcelas
-             SET superficie = $1, longitud = $2, anchura = $3, pendiente = $4
-             WHERE id_parcela = $5`,
-            [dimensiones.superficie, dimensiones.longitud, dimensiones.anchura, dimensiones.pendiente, id]
+        // Obtener las dimensiones actuales de la parcela
+        const dimensionesActualesResult = await client.query(
+            `SELECT superficie, longitud, anchura, pendiente
+             FROM dimensiones_parcelas
+             WHERE id_parcela = $1
+             ORDER BY fecha_creacion DESC
+             LIMIT 1`,
+            [id]
         );
+
+        const dimensionesActuales = dimensionesActualesResult.rows[0];
+
+        // Comparar las dimensiones actuales con las nuevas dimensiones
+        const dimensionesHanCambiado = 
+            dimensionesActuales.superficie !== dimensiones.superficie ||
+            dimensionesActuales.longitud !== dimensiones.longitud ||
+            dimensionesActuales.anchura !== dimensiones.anchura ||
+            dimensionesActuales.pendiente !== dimensiones.pendiente;
+
+        if (dimensionesHanCambiado) {
+            // Insertar las nuevas dimensiones si han cambiado
+            await client.query(
+                `INSERT INTO dimensiones_parcelas (id_parcela, superficie, longitud, anchura, pendiente, fecha_creacion)
+                 VALUES ($1, $2, $3, $4, $5, NOW()::timestamp(0))`,
+                [id, dimensiones.superficie, dimensiones.longitud, dimensiones.anchura, dimensiones.pendiente]
+            );
+        }
 
         // Confirmar la transacción
         await client.query('COMMIT');
-
         client.release();
+
         res.status(200).send('Parcela y dimensiones actualizadas exitosamente');
     } catch (error) {
         console.error('Error al modificar la parcela y las dimensiones:', error);
