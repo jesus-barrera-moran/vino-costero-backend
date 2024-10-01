@@ -141,7 +141,7 @@ exports.register = async (req, res) => {
 };
 
 // Endpoint para actualizar un usuario existente
-exports.register = async (req, res) => {
+exports.manageUser = async (req, res) => {
   const { id } = req.params; // ID del usuario a actualizar
   const { rol, habilitado } = req.body; // Datos a actualizar (roles y habilitado)
   let client;
@@ -208,5 +208,62 @@ exports.register = async (req, res) => {
     console.error('Error al actualizar el usuario:', error);
     await client.query('ROLLBACK');
     res.status(500).send('Error al actualizar el usuario');
+  }
+};
+
+// Endpoint para actualizar un usuario existente (nombre, apellido, correo y contraseña)
+exports.updateUser = async (req, res) => {
+  const { id } = req.params; // ID del usuario a actualizar
+  const { nombre, apellido, correo, contrasena } = req.body; // Datos a actualizar
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+
+    // Iniciar transacción
+    await client.query('BEGIN');
+
+    // Verificar si el usuario existe
+    const usuarioExiste = await client.query(
+      `SELECT * 
+       FROM usuarios 
+       WHERE id_usuario = $1`,
+      [id]
+    );
+
+    if (usuarioExiste.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Si se proporciona una nueva contraseña, encriptarla
+    let hashedPassword = usuarioExiste.rows[0].contrasena; // Mantener la contraseña anterior si no se actualiza
+    if (contrasena) {
+      const saltRounds = 10;
+      hashedPassword = await bcrypt.hash(contrasena, saltRounds);
+    }
+
+    // Actualizar los datos del usuario
+    await client.query(
+      `UPDATE usuarios 
+       SET nombre = $1, apellido = $2, correo = $3, contrasena = $4 
+       WHERE id_usuario = $5`,
+      [nombre, apellido, correo, hashedPassword, id]
+    );
+
+    // Confirmar la transacción
+    await client.query('COMMIT');
+    client.release();
+
+    return res.status(200).json({ mensaje: 'Perfil del usuario actualizado exitosamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar el perfil del usuario:', error);
+    if (client) {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+    res.status(500).send('Error al actualizar el perfil del usuario');
   }
 };

@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { connectWithConnector } = require('../database/connector');
+const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
 
 // Ruta para registrar un nuevo tipo de uva
-router.post('/', async (req, res) => {
+router.post('/', verificarToken, verificarRol([1, 2]), async (req, res) => {
     const { nombre, descripcion, ph, temperatura, humedad, tiempoCosecha, parcelas } = req.body;
 
     const pool = await connectWithConnector('vino_costero_negocio');
@@ -68,7 +69,7 @@ router.post('/', async (req, res) => {
 });
 
 // Ruta para modificar un tipo de uva existente
-router.put('/:id', async (req, res) => {
+router.put('/:id', verificarToken, verificarRol([1, 2]), async (req, res) => {
     const { id } = req.params;
     const { nombre, descripcion, ph, temperatura, humedad, tiempoCosecha, parcelas } = req.body;
 
@@ -104,7 +105,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Ruta para obtener un tipo de uva por ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', verificarToken, verificarRol([1, 2, 5]), async (req, res) => {
     const { id } = req.params;
 
     try {
@@ -158,7 +159,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Obtener tipos de uva y parcelas asociadas
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, verificarRol([1, 2, 5]), async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();

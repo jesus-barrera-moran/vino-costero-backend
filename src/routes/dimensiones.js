@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { connectWithConnector } = require('../database/connector'); // Ajusta el path si es necesario
+const { connectWithConnector } = require('../database/connector');
+const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
 
 // Ruta para registrar dimensiones para una parcela
-router.post('/:id_parcela', async (req, res) => {
+router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, res) => {
     const { id_parcela } = req.params;
     const { superficie, longitud, anchura, pendiente } = req.body;
 
@@ -46,7 +47,7 @@ router.post('/:id_parcela', async (req, res) => {
 });
 
 // Obtener dimensiones actuales e historial de cada parcela
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, verificarRol([1, 3, 5]), async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
@@ -104,7 +105,7 @@ router.get('/', async (req, res) => {
 });
 
 // Ruta para actualizar (crear un nuevo registro) las dimensiones de una parcela
-router.put('/:id_parcela', async (req, res) => {
+router.put('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, res) => {
     const { id_parcela } = req.params;
     const { superficie, longitud, anchura, pendiente } = req.body;
 

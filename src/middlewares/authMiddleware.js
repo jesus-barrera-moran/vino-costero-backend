@@ -3,16 +3,22 @@ const { SECRET_KEY } = require('../config/config');
 
 // Middleware para verificar el JWT
 exports.verificarToken = (req, res, next) => {
-  const token = req.headers['authorization'];
+  const authHeader = req.headers['authorization'];
+
+  if (!authHeader) {
+    console.error('Authorization header is missing');
+    return res.status(403).json({ error: 'Token no proporcionado' });
+  }
+
+  const token = authHeader.split(' ')[1];
 
   if (!token) {
     return res.status(403).json({ error: 'Token no proporcionado' });
   }
 
   try {
-    // Verificar el token
     const decoded = jwt.verify(token, SECRET_KEY);
-    req.user = decoded; // Añadir los datos del usuario a la solicitud
+    req.user = decoded;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Token inválido' });

@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { connectWithConnector } = require('../database/connector');
+const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
 
 // Ruta para registrar una nueva siembra en una parcela
-router.post('/', async (req, res) => {
+router.post('/', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) => {
     const { id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
 
     try {
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
 });
 
 // Ruta para modificar una siembra existente
-router.put('/:id', async (req, res) => {
+router.put('/:id', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) => {
     const { id } = req.params;
     const { fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
 
@@ -90,7 +91,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Ruta para obtener la última siembra activa por ID de parcela
-router.get('/:id_parcela', async (req, res) => {
+router.get('/:id_parcela', verificarToken, verificarRol([1, 2, 3, 4, 5]), async (req, res) => {
     const { id_parcela } = req.params;
 
     try {
@@ -142,7 +143,7 @@ router.get('/:id_parcela', async (req, res) => {
 });
 
 // Obtener solo parcelas con siembras actuales o historial de siembras
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, verificarRol([1, 2, 3, 4, 5]), async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();

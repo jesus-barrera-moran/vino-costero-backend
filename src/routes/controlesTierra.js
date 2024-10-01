@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { connectWithConnector } = require('../database/connector');
+const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
 
 // Ruta para registrar un nuevo control de tierra
-router.post('/:id_parcela', async (req, res) => {
+router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, res) => {
     const { id_parcela } = req.params;
     const { ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones } = req.body;
 
@@ -42,7 +43,7 @@ router.post('/:id_parcela', async (req, res) => {
 });
 
 // Obtener controles de tierra de cada parcela
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, verificarRol([1, 3, 5]), async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();

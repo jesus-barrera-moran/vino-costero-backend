@@ -4,7 +4,7 @@ const { connectWithConnector } = require('../database/connector');
 const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
 
 // Ruta para crear una nueva parcela
-router.post('/', async (req, res) => {
+router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
     const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, dimensiones, control_tierra } = req.body;
 
     try {
@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
 });
 
 // Ruta para modificar una parcela existente
-router.put('/:id', async (req, res) => {
+router.put('/:id', verificarToken, verificarRol([1, 3]), async (req, res) => {
     const { id } = req.params;
     const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, dimensiones } = req.body;
 
@@ -109,7 +109,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Obtener los detalles de una parcela por ID
-router.get('/:id', /*verificarToken, verificarRol([1,4]),*/ async (req, res) => {
+router.get('/:id', verificarToken, verificarRol([1, 3, 5]), async (req, res) => {
     const { id } = req.params;
 
     try {
@@ -179,7 +179,7 @@ router.get('/:id', /*verificarToken, verificarRol([1,4]),*/ async (req, res) => 
 });
 
 // Obtener todas las parcelas con sus detalles
-router.get('/', async (req, res) => {
+router.get('/', verificarToken, verificarRol([1, 3, 5]), async (req, res) => {
     try {
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
