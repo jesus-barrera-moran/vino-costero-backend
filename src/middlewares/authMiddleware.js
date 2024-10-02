@@ -34,3 +34,11 @@ exports.verificarRol = (rolesPermitidos) => {
     next(); // Continuar si el usuario tiene el rol correcto
   };
 };
+
+// Middleware para verificar el rol del usuario
+exports.verificarPertenencia = (req, res, next) => {
+  if (req.user.username !== req.params.username) {
+    return res.status(403).json({ error: 'Acceso denegado, usuario incorrecto' });
+  }
+  next();
+};

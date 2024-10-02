@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { verificarToken, verificarRol } = require('../middlewares/authMiddleware');
+const { verificarToken, verificarRol, verificarPertenencia } = require('../middlewares/authMiddleware');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt'); // Importar bcrypt
 const { SECRET_KEY } = require('../config/config');
@@ -213,8 +213,8 @@ router.put('/manage/:id', verificarToken, verificarRol([1]), async (req, res) =>
   }
 });
 
-router.put('/update/:id', verificarToken, verificarRol([1]), async (req, res) => {
-  const { id } = req.params; // ID del usuario a actualizar
+router.put('/update/:username', verificarToken, verificarRol([1]), async (req, res) => {
+  const { username } = req.params; // ID del usuario a actualizar
   const { nombre, apellido, correo, contrasena } = req.body; // Datos a actualizar
   let client;
 
@@ -229,8 +229,8 @@ router.put('/update/:id', verificarToken, verificarRol([1]), async (req, res) =>
     const usuarioExiste = await client.query(
       `SELECT * 
        FROM usuarios 
-       WHERE id_usuario = $1`,
-      [id]
+       WHERE usuario = $1`,
+      [username]
     );
 
     if (usuarioExiste.rows.length === 0) {
@@ -249,8 +249,8 @@ router.put('/update/:id', verificarToken, verificarRol([1]), async (req, res) =>
     await client.query(
       `UPDATE usuarios 
        SET nombre = $1, apellido = $2, correo = $3, contrasena = $4 
-       WHERE id_usuario = $5`,
-      [nombre, apellido, correo, hashedPassword, id]
+       WHERE usuario = $5`,
+      [nombre, apellido, correo, hashedPassword, username]
     );
 
     // Confirmar la transacción
@@ -269,9 +269,55 @@ router.put('/update/:id', verificarToken, verificarRol([1]), async (req, res) =>
   }
 })
 
-// Ruta protegida (requiere token JWT)
-router.get('/datos', verificarToken, (req, res) => {
-  res.json({ usuario: req.user });
+// Ruta para obtener un usuario por su ID
+router.get('/usuarios/:username', verificarToken, verificarPertenencia, async (req, res) => {
+  const { username } = req.params;
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+
+    // Consultar la información del usuario
+    const userResult = await client.query(
+      `SELECT id_usuario, usuario, nombre, apellido, correo, habilitado
+       FROM usuarios
+       WHERE usuario = $1`,
+      [username]
+    );
+
+    if (userResult.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const userRols = await client.query(
+      `SELECT ur.id_rol as rol
+       FROM usuarios_roles ur
+       LEFT JOIN usuarios u ON ur.id_usuario = u.id_usuario
+       WHERE u.usuario = $1`,
+      [username]
+    );
+
+    if (userRols.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Roles no encontrados' });
+    }
+
+    const roles = userRols.rows.map(row => row.rol);
+
+    const usuario = { ...userResult.rows[0], roles };
+    client.release();
+
+    // Retornar los datos del usuario
+    return res.status(200).json(usuario);
+  } catch (error) {
+    console.error('Error al obtener el usuario:', error);
+    if (client) {
+      client.release();
+    }
+    res.status(500).send('Error al obtener el usuario');
+  }
 });
 
 module.exports = router;
