@@ -143,6 +143,41 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
   }
 });
 
+// Endpoint para obtener la lista de usuarios con su último rol
+router.get('/usuarios', verificarToken, verificarRol([1, 5]), async (req, res) => {
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+
+    // Consultar la información de los usuarios junto con su último rol
+    const usuariosResult = await client.query(`
+      SELECT DISTINCT ON (u.id_usuario) u.id_usuario, u.usuario, u.correo, u.habilitado, r.id_rol as rol
+      FROM usuarios u
+      LEFT JOIN usuarios_roles ur ON u.id_usuario = ur.id_usuario
+      LEFT JOIN roles r ON ur.id_rol = r.id_rol
+      ORDER BY u.id_usuario, ur.fecha_creacion DESC, ur.id_rol DESC
+    `);
+
+    if (usuariosResult.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'No se encontraron usuarios' });
+    }
+
+    const usuarios = usuariosResult.rows;
+    client.release();
+
+    // Retornar la lista de usuarios con su último rol
+    return res.status(200).json(usuarios);
+
+  } catch (error) {
+    console.error('Error al obtener la lista de usuarios:', error);
+    if (client) client.release();
+    return res.status(500).send('Error al obtener la lista de usuarios');
+  }
+});
+
 router.put('/manage/:id', verificarToken, verificarRol([1]), async (req, res) => {
   const { id } = req.params; // ID del usuario a actualizar
   const { rol, habilitado } = req.body; // Datos a actualizar (roles y habilitado)
@@ -213,7 +248,7 @@ router.put('/manage/:id', verificarToken, verificarRol([1]), async (req, res) =>
   }
 });
 
-router.put('/update/:username', verificarToken, verificarRol([1]), async (req, res) => {
+router.put('/update/:username', verificarToken, verificarPertenencia, async (req, res) => {
   const { username } = req.params; // ID del usuario a actualizar
   const { nombre, apellido, correo, contrasena } = req.body; // Datos a actualizar
   let client;
@@ -269,6 +304,61 @@ router.put('/update/:username', verificarToken, verificarRol([1]), async (req, r
   }
 })
 
+// Endpoint para actualizar múltiples usuarios
+router.put('/usuarios/batch', verificarToken, verificarRol([1]), async (req, res) => {
+  const { usuarios } = req.body; // Array de usuarios con sus cambios
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+    await client.query('BEGIN'); // Iniciar transacción
+
+    // Iterar sobre cada usuario y aplicar los cambios
+    for (const usuario of usuarios) {
+      const { id_usuario, rol, habilitado } = usuario;
+
+      // Actualizar el estado (habilitado/deshabilitado) si está presente en el payload
+      if (habilitado !== undefined) {
+        await client.query(
+          `UPDATE usuarios SET habilitado = $1 WHERE id_usuario = $2`,
+          [habilitado, id_usuario]
+        );
+      }
+
+      // Actualizar el rol si está presente en el payload
+      if (rol !== undefined) {
+        const rolResult = await client.query(
+          `SELECT id_rol FROM roles WHERE id_rol = $1`,
+          [rol]
+        );
+
+        if (rolResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          client.release();
+          return res.status(400).json({ error: `Rol no válido para el usuario ${id_usuario}` });
+        }
+
+        // Actualizar la relación usuario-rol en la tabla "usuario_roles"
+        await client.query(
+          `UPDATE usuarios_roles SET id_rol = $1 WHERE id_usuario = $2`,
+          [rol, id_usuario]
+        );
+      }
+    }
+
+    await client.query('COMMIT'); // Confirmar la transacción
+    client.release();
+    return res.status(200).json({ mensaje: 'Usuarios actualizados exitosamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar los usuarios:', error);
+    await client.query('ROLLBACK');
+    if (client) client.release();
+    return res.status(500).send('Error al actualizar los usuarios');
+  }
+});
+
 // Ruta para obtener un usuario por su ID
 router.get('/usuarios/:username', verificarToken, verificarPertenencia, async (req, res) => {
   const { username } = req.params;
@@ -317,6 +407,93 @@ router.get('/usuarios/:username', verificarToken, verificarPertenencia, async (r
       client.release();
     }
     res.status(500).send('Error al obtener el usuario');
+  }
+});
+
+// Endpoint para actualizar el rol de un usuario
+router.put('/usuarios/:id/rol', verificarToken, verificarRol([1]), async (req, res) => {
+  const { id } = req.params;
+  const { rol } = req.body; // El rol que vamos a asignar
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+
+    // Verificar si el usuario existe
+    const usuarioExiste = await client.query(
+      `SELECT * FROM usuarios WHERE id_usuario = $1`, 
+      [id]
+    );
+
+    if (usuarioExiste.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Verificar si el rol existe
+    const rolResult = await client.query(
+      `SELECT id_rol FROM roles WHERE id_rol = $1`,
+      [rol]
+    );
+
+    if (rolResult.rows.length === 0) {
+      client.release();
+      return res.status(400).json({ error: 'Rol no válido' });
+    }
+
+    const idRol = rolResult.rows[0].id_rol;
+
+    // Actualizar el rol del usuario en la tabla "usuario_roles"
+    await client.query(
+      `UPDATE usuarios_roles SET id_rol = $1 WHERE id_usuario = $2`,
+      [idRol, id]
+    );
+
+    client.release();
+    return res.status(200).json({ mensaje: 'Rol actualizado exitosamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar el rol:', error);
+    if (client) client.release();
+    return res.status(500).send('Error al actualizar el rol');
+  }
+});
+
+// Endpoint para actualizar el estado del usuario
+router.put('/usuarios/:id/habilitar', verificarToken, verificarRol([1]), async (req, res) => {
+  const { id } = req.params;
+  const { habilitado } = req.body; // El estado habilitado (true/false)
+  let client;
+
+  try {
+    const pool = await connectWithConnector('vino_costero_usuarios');
+    client = await pool.connect();
+
+    // Verificar si el usuario existe
+    const usuarioExiste = await client.query(
+      `SELECT * FROM usuarios WHERE id_usuario = $1`, 
+      [id]
+    );
+
+    if (usuarioExiste.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Actualizar el estado (habilitado/deshabilitado) del usuario
+    await client.query(
+      `UPDATE usuarios SET habilitado = $1 WHERE id_usuario = $2`,
+      [habilitado, id]
+    );
+
+    client.release();
+    return res.status(200).json({ mensaje: 'Estado actualizado exitosamente' });
+
+  } catch (error) {
+    console.error('Error al actualizar el estado:', error);
+    if (client) client.release();
+    return res.status(500).send('Error al actualizar el estado');
   }
 });
 
