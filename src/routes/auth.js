@@ -17,11 +17,16 @@ router.post('/login', async (req, res) => {
 
     // Obtener los detalles del usuario, incluyendo su contraseña y rol
     const userResult = await client.query(
-      `SELECT contrasena, usuario
+      `SELECT contrasena, usuario, habilitado
        FROM usuarios
        WHERE usuario = $1`,
       [username]
     );
+
+    if (userResult.rows[0].habilitado === false) {
+      client.release();
+      return res.status(401).json({ error: 'Usuario deshabilitado' });
+    }
 
     // Verificar si el usuario fue encontrado
     if (userResult.rows.length === 0) {
