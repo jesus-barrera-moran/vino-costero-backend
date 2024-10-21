@@ -10,8 +10,9 @@ const siembrasRoutes = require('./src/routes/siembras');
 const cors = require('cors');
 
 // Configurar CORS para permitir solicitudes del frontend
+const FRONTEND_HOST = process.env.FRONTEND_HOST || 'http://localhost:3001'
 app.use(cors({
-    origin: 'http://localhost:3001', // Cambia esto al puerto donde corre tu frontend
+    origin: FRONTEND_HOST, // Cambia esto al puerto donde corre tu frontend
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));

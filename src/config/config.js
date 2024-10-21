@@ -1,5 +1,4 @@
 module.exports = {
-	SECRET_KEY: 'mi_super_secreta_clave',
-	PORT: 3000,
+	SECRET_KEY: process.env.SECRET_KEY,
+	PORT: process.env.PORT || 3000,
 };
-  
