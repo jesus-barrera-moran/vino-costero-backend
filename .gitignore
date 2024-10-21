@@ -2,4 +2,3 @@
 /dist
 /keys
 .env
-package-lock.json
