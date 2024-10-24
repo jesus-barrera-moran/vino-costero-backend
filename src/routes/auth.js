@@ -3,15 +3,29 @@ const router = express.Router();
 const { verificarToken, verificarRol, verificarPertenencia } = require('../middlewares/authMiddleware');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt'); // Importar bcrypt
+const CryptoJS = require('crypto-js'); // Importar CryptoJS para la desencriptación
 const { SECRET_KEY } = require('../config/config');
 const { connectWithConnector } = require('../database/connector');
 
+// Clave de desencriptación (debe ser la misma usada en el frontend)
+const ENCRYPTION_KEY = 'tuClaveSecreta';
+
+// Función para desencriptar texto usando CryptoJS
+const decryptText = (encryptedText) => {
+  const bytes = CryptoJS.AES.decrypt(encryptedText, ENCRYPTION_KEY);
+  return bytes.toString(CryptoJS.enc.Utf8);
+};
+
 // Ruta para login (genera el token JWT)
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  let { username, password } = req.body;
   let client;
 
   try {
+    // Desencriptar las credenciales recibidas del frontend
+    const decryptedUsername = decryptText(username);
+    const decryptedPassword = decryptText(password);
+
     const pool = await connectWithConnector('vino_costero_usuarios');
     client = await pool.connect();
 
@@ -20,13 +34,8 @@ router.post('/login', async (req, res) => {
       `SELECT contrasena, usuario, habilitado
        FROM usuarios
        WHERE usuario = $1`,
-      [username]
+      [decryptedUsername]
     );
-
-    if (userResult.rows[0].habilitado === false) {
-      client.release();
-      return res.status(401).json({ error: 'Usuario deshabilitado' });
-    }
 
     // Verificar si el usuario fue encontrado
     if (userResult.rows.length === 0) {
@@ -34,7 +43,21 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
+    // Verificar si el usuario está habilitado
+    if (userResult.rows[0]?.habilitado === false) {
+      client.release();
+      return res.status(401).json({ error: 'Usuario deshabilitado' });
+    }
+
     const user = userResult.rows[0];
+
+    // Comparar la contraseña desencriptada con la contraseña encriptada almacenada usando bcrypt
+    const validPassword = await bcrypt.compare(decryptedPassword, user.contrasena);
+
+    if (!validPassword) {
+      client.release();
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
+    }
 
     // Obtener los roles del usuario
     const userRoles = await client.query(
@@ -43,24 +66,16 @@ router.post('/login', async (req, res) => {
        LEFT JOIN usuarios_roles ur ON u.id_usuario = ur.id_usuario
        LEFT JOIN roles r ON ur.id_rol = r.id_rol
        WHERE u.usuario = $1`,
-      [username]
+      [decryptedUsername]
     );
 
     const roles = userRoles.rows.map(row => row.role);
-
-    // Verificar la contraseña usando bcrypt
-    const validPassword = await bcrypt.compare(password, user.contrasena);
-
-    if (!validPassword) {
-      client.release();
-      return res.status(401).json({ error: 'Contraseña incorrecta' });
-    }
 
     // Si la contraseña es válida, generar el token JWT
     const token = jwt.sign({ username: user.usuario, roles }, SECRET_KEY, { expiresIn: '1h' });
 
     client.release();
-    return res.json({ token, username, roles });
+    return res.json({ token, username: decryptedUsername, roles });
 
   } catch (error) {
     console.error('Error al autenticar usuario:', error);
@@ -75,6 +90,9 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
   let client;
 
   try {
+    // Desencriptar la contraseña recibida
+    const decryptedPassword = decryptText(password); // Usar la función de desencriptación
+
     const pool = await connectWithConnector('vino_costero_usuarios');
     client = await pool.connect();
 
@@ -96,7 +114,7 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
 
     // Encriptar la contraseña
     const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const hashedPassword = await bcrypt.hash(decryptedPassword, saltRounds);
 
     // Insertar el nuevo usuario en la tabla "usuarios"
     const result = await client.query(
