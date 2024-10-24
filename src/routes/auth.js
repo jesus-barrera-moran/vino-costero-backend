@@ -299,11 +299,22 @@ router.put('/manage/:id', verificarToken, verificarRol([1]), async (req, res) =>
 });
 
 router.put('/update/:username', verificarToken, verificarPertenencia, async (req, res) => {
-  const { username } = req.params; // ID del usuario a actualizar
-  const { nombre, apellido, correo, contrasena } = req.body; // Datos a actualizar
+  const { username } = req.params;
+  const { nombre, apellido, correo, contrasena } = req.body;
   let client;
 
   try {
+    // Validación de campos requeridos
+    if (!nombre || !apellido || !correo) {
+      return res.status(400).json({ message: 'Error al actualizar el usuario' });
+    }
+
+    // Validación del formato del correo electrónico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(correo)) {
+      return res.status(400).json({ message: 'Error al actualizar el usuario' });
+    }
+
     const pool = await connectWithConnector('vino_costero_usuarios');
     client = await pool.connect();
 
@@ -320,7 +331,7 @@ router.put('/update/:username', verificarToken, verificarPertenencia, async (req
 
     if (usuarioExiste.rows.length === 0) {
       client.release();
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
     // Si se proporciona una nueva contraseña, encriptarla
@@ -342,7 +353,7 @@ router.put('/update/:username', verificarToken, verificarPertenencia, async (req
     await client.query('COMMIT');
     client.release();
 
-    return res.status(200).json({ mensaje: 'Perfil del usuario actualizado exitosamente' });
+    return res.status(200).json({ message: 'Usuario actualizado exitosamente' });
 
   } catch (error) {
     console.error('Error al actualizar el perfil del usuario:', error);
@@ -350,9 +361,9 @@ router.put('/update/:username', verificarToken, verificarPertenencia, async (req
       await client.query('ROLLBACK');
       client.release();
     }
-    res.status(500).send('Error al actualizar el perfil del usuario');
+    res.status(500).json({ message: 'Error al actualizar el usuario' });
   }
-})
+});
 
 // Endpoint para actualizar múltiples usuarios
 router.put('/usuarios/batch', verificarToken, verificarRol([1]), async (req, res) => {
