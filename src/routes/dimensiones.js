@@ -9,6 +9,15 @@ router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, re
     const { superficie, longitud, anchura, pendiente } = req.body;
 
     try {
+        // Validación de dimensiones
+        if (
+            !superficie || !longitud || !anchura || !pendiente || 
+            superficie <= 0 || longitud <= 0 || anchura <= 0 || 
+            pendiente < 0 || pendiente > 100
+        ) {
+            return res.status(400).send({ message: 'Error al actualizar las dimensiones' });
+        }
+
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
@@ -20,9 +29,9 @@ router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, re
             [id_parcela]
         );
 
-        if (siembrasActivas.rows[0].count > 0) {
+        if (parseInt(siembrasActivas.rows[0].count) > 0) {
             client.release();
-            return res.status(400).send('La parcela tiene siembras activas. No se pueden registrar nuevas dimensiones.');
+            return res.status(400).send({ message: 'Error al actualizar las dimensiones' });
         }
 
         // Insertar las nuevas dimensiones
@@ -38,11 +47,11 @@ router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, re
             superficie,
             longitud,
             anchura,
-            pendiente,
-         });
+            pendiente
+        });
     } catch (error) {
         console.error('Error al registrar dimensiones:', error);
-        res.status(500).send('Error al registrar dimensiones');
+        res.status(500).send({ message: 'Error al actualizar las dimensiones' });
     }
 });
 
