@@ -9,6 +9,16 @@ router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, re
     const { ph_tierra, condiciones_humedad, condiciones_temperatura, observaciones } = req.body;
 
     try {
+        // Validación de los valores de control de tierra
+        if (
+            !ph_tierra || !condiciones_humedad || !condiciones_temperatura || 
+            ph_tierra < 0 || ph_tierra > 14 || 
+            condiciones_humedad < 0 || condiciones_humedad > 100 || 
+            condiciones_temperatura < -50 || condiciones_temperatura > 100
+        ) {
+            return res.status(400).send({ message: 'Error al registrar el control de tierra' });
+        }
+
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
@@ -21,7 +31,8 @@ router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, re
         );
 
         if (dimensionesResult.rows[0].count == 0) {
-            return res.status(400).send('No se pueden registrar controles de tierra sin dimensiones asociadas.');
+            client.release();
+            return res.status(400).send({ message: 'Error al registrar el control de tierra' });
         }
 
         // Registrar el nuevo control de tierra
@@ -34,11 +45,11 @@ router.post('/:id_parcela', verificarToken, verificarRol([1, 3]), async (req, re
         client.release();
 
         res.status(201).json({
-            mensaje: 'Control de tierra registrado exitosamente',
+            mensaje: 'El control de tierra ha sido registrado exitosamente',
         });
     } catch (error) {
         console.error('Error al registrar control de tierra:', error);
-        res.status(500).send('Error al registrar control de tierra');
+        res.status(500).send({ message: 'Error al registrar el control de tierra' });
     }
 });
 
