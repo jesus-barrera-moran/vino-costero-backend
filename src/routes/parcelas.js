@@ -14,6 +14,18 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
         // Iniciar transacción
         await client.query('BEGIN');
 
+        // Verificar si el nombre de la parcela ya existe
+        const nombreParcelaResult = await client.query(
+            `SELECT COUNT(*) FROM parcelas WHERE nombre_parcela = $1`,
+            [nombre_parcela]
+        );
+
+        if (parseInt(nombreParcelaResult.rows[0].count) > 0) {
+            await client.query('ROLLBACK');
+            client.release();
+            return res.status(400).send({ message: 'El nombre de la parcela ya existe'});
+        }
+
         // Crear la parcela
         const parcelaResult = await client.query(
             `INSERT INTO parcelas (nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, fecha_creacion) 
@@ -26,7 +38,7 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
         await client.query(
             `INSERT INTO dimensiones_parcelas (id_parcela, superficie, longitud, anchura, pendiente, fecha_creacion) 
              VALUES ($1, $2, $3, $4, $5, NOW())`,
-             [id_parcela, dimensiones.superficie, dimensiones.longitud, dimensiones.anchura, dimensiones.pendiente]
+            [id_parcela, dimensiones.superficie, dimensiones.longitud, dimensiones.anchura, dimensiones.pendiente]
         );
 
         // Crear el primer control de tierra
@@ -40,10 +52,16 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
         await client.query('COMMIT');
         client.release();
 
-        res.status(201).send('Parcela creada exitosamente');
+        res.status(201).send({ message: 'Parcela creada exitosamente'});
     } catch (error) {
         console.error('Error al crear la parcela:', error);
-        await client.query('ROLLBACK');
+        
+        // Rollback en caso de error
+        if (client) {
+            await client.query('ROLLBACK');
+            client.release();
+        }
+
         res.status(500).send('Error al crear la parcela');
     }
 });
