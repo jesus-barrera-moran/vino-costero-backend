@@ -11,6 +11,17 @@ router.post('/', verificarToken, verificarRol([1, 2]), async (req, res) => {
     const client = await pool.connect();
 
     try {
+        // Verificar duplicidad del nombre del tipo de uva
+        const nombreExistente = await client.query(
+            `SELECT COUNT(*) FROM tipos_uvas WHERE nombre_uva = $1`,
+            [nombre]
+        );
+
+        if (parseInt(nombreExistente.rows[0].count) > 0) {
+            client.release();
+            return res.status(400).json({ error: 'El nombre del tipo de uva ya existe' });
+        }
+
         // Iniciar la transacción
         await client.query('BEGIN');
 
@@ -76,6 +87,17 @@ router.put('/:id', verificarToken, verificarRol([1, 2]), async (req, res) => {
     const pool = await connectWithConnector('vino_costero_negocio');
     const client = await pool.connect();
     try {
+        // Verificar duplicidad del nombre del tipo de uva (excluyendo el tipo de uva actual)
+        const nombreExistente = await client.query(
+            `SELECT COUNT(*) FROM tipos_uvas WHERE nombre_uva = $1 AND id_tipo_uva != $2`,
+            [nombre, id]
+        );
+
+        if (parseInt(nombreExistente.rows[0].count) > 0) {
+            client.release();
+            return res.status(400).json({ error: 'El nombre del tipo de uva ya existe' });
+        }
+
         // Iniciar la transacción
         await client.query('BEGIN');
 
