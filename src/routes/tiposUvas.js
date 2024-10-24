@@ -19,7 +19,7 @@ router.post('/', verificarToken, verificarRol([1, 2]), async (req, res) => {
 
         if (parseInt(nombreExistente.rows[0].count) > 0) {
             client.release();
-            return res.status(400).json({ error: 'El nombre del tipo de uva ya existe' });
+            return res.status(400).json({ message: 'El nombre del tipo de uva ya existe' });
         }
 
         // Iniciar la transacción
@@ -95,7 +95,7 @@ router.put('/:id', verificarToken, verificarRol([1, 2]), async (req, res) => {
 
         if (parseInt(nombreExistente.rows[0].count) > 0) {
             client.release();
-            return res.status(400).json({ error: 'El nombre del tipo de uva ya existe' });
+            return res.status(400).json({ message: 'El nombre del tipo de uva ya existe' });
         }
 
         // Iniciar la transacción
