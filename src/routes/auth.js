@@ -99,17 +99,30 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
     // Iniciar transacción
     await client.query('BEGIN');
 
-    // Verificar si el usuario ya existe
+    // Verificar si el nombre de usuario ya existe
     const usuarioExiste = await client.query(
-      `SELECT COUNT(*) 
+      `SELECT COUNT(*) AS total 
        FROM usuarios 
        WHERE usuario = $1`,
       [username]
     );
 
-    if (usuarioExiste.rows[0].count > 0) {
+    if (parseInt(usuarioExiste.rows[0].total) > 0) {
       client.release();
-      return res.status(400).json({ error: 'El usuario ya existe' });
+      return res.status(400).json({ message: 'El nombre de usuario ya está en uso' });
+    }
+
+    // Verificar si el correo electrónico ya existe
+    const correoExiste = await client.query(
+      `SELECT COUNT(*) AS total 
+       FROM usuarios 
+       WHERE correo = $1`,
+      [correo]
+    );
+
+    if (parseInt(correoExiste.rows[0].total) > 0) {
+      client.release();
+      return res.status(400).json({ message: 'El correo electrónico ya está en uso' });
     }
 
     // Encriptar la contraseña
@@ -137,7 +150,7 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
       if (rolResult.rows.length === 0) {
         await client.query('ROLLBACK');
         client.release();
-        return res.status(400).json({ error: 'Rol no válido' });
+        return res.status(400).json({ message: 'Rol no válido' });
       }
     }
 
@@ -160,9 +173,12 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
     return res.status(201).json({ token, username, roles });
 
   } catch (error) {
+    if (client) {
+      await client.query('ROLLBACK');
+      client.release();
+    }
     console.error('Error al crear el usuario:', error);
-    await client.query('ROLLBACK');
-    res.status(500).send('Error al crear el usuario');
+    res.status(500).json({ message: 'Error al crear el usuario' });
   }
 });
 
