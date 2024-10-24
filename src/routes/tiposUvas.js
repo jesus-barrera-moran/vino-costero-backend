@@ -11,6 +11,16 @@ router.post('/', verificarToken, verificarRol([1, 2]), async (req, res) => {
     const client = await pool.connect();
 
     try {
+        // Validación de los datos de entrada
+        if (
+            !nombre || !descripcion || !ph || !humedad || !temperatura || !tiempoCosecha ||
+            ph < 0 || ph > 14 || humedad < 0 || humedad > 100 || 
+            temperatura < -50 || temperatura > 100 || tiempoCosecha < 1 || tiempoCosecha > 365
+        ) {
+            client.release();
+            return res.status(400).json({ message: 'Error al registrar el tipo de uva' });
+        }
+
         // Verificar duplicidad del nombre del tipo de uva
         const nombreExistente = await client.query(
             `SELECT COUNT(*) FROM tipos_uvas WHERE nombre_uva = $1`,
@@ -75,18 +85,28 @@ router.post('/', verificarToken, verificarRol([1, 2]), async (req, res) => {
         await client.query('ROLLBACK');
         client.release();
         console.error('Error al registrar el tipo de uva:', error.message);
-        res.status(400).json({ error: 'Error al registrar el tipo de uva: ' + error.message });
+        res.status(400).json({ message: 'Error al registrar el tipo de uva' });
     }
 });
 
 // Ruta para modificar un tipo de uva existente
 router.put('/:id', verificarToken, verificarRol([1, 2]), async (req, res) => {
     const { id } = req.params;
-    const { nombre, descripcion, ph, temperatura, humedad, tiempoCosecha, parcelas } = req.body;
+    const { nombre, descripcion, ph, temperatura, humedad, tiempoCosecha } = req.body;
 
     const pool = await connectWithConnector('vino_costero_negocio');
     const client = await pool.connect();
     try {
+        // Validación de los datos de entrada
+        if (
+            !nombre || !descripcion || !ph || !humedad || !temperatura || !tiempoCosecha ||
+            ph < 0 || ph > 14 || humedad < 0 || humedad > 100 || 
+            temperatura < -50 || temperatura > 100 || tiempoCosecha < 1 || tiempoCosecha > 365
+        ) {
+            client.release();
+            return res.status(400).json({ message: 'Error al actualizar el tipo de uva' });
+        }
+
         // Verificar duplicidad del nombre del tipo de uva (excluyendo el tipo de uva actual)
         const nombreExistente = await client.query(
             `SELECT COUNT(*) FROM tipos_uvas WHERE nombre_uva = $1 AND id_tipo_uva != $2`,
@@ -122,7 +142,7 @@ router.put('/:id', verificarToken, verificarRol([1, 2]), async (req, res) => {
         await client.query('ROLLBACK');
         client.release();
         console.error('Error al actualizar el tipo de uva:', error.message);
-        res.status(400).json({ error: 'Error al actualizar el tipo de uva: ' + error.message });
+        res.status(400).json({ message: 'Error al actualizar el tipo de uva' });
     }
 });
 
