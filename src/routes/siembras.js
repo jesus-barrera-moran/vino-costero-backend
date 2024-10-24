@@ -8,6 +8,14 @@ router.post('/', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) =>
     const { id_parcela, id_tipo_uva, fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
 
     try {
+        // Validación de los datos de entrada
+        if (
+            !id_parcela || !id_tipo_uva || !fecha_plantacion || !cantidad_plantas || !tecnica_siembra || 
+            cantidad_plantas <= 0
+        ) {
+            return res.status(400).json({ message: 'Error al registrar la siembra' });
+        }
+
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
@@ -20,7 +28,8 @@ router.post('/', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) =>
         );
 
         if (dimensionesResult.rows[0].total == 0) {
-            return res.status(400).send('No se puede registrar la siembra. La parcela no tiene dimensiones asociadas.');
+            client.release();
+            return res.status(400).json({ message: 'Error al registrar la siembra' });
         }
 
         // Verificar que no haya siembras activas en la parcela
@@ -32,19 +41,21 @@ router.post('/', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) =>
         );
 
         if (siembrasActivasResult.rows[0].total > 0) {
-            return res.status(400).send('No se puede registrar la siembra. La parcela ya tiene siembras activas.');
+            client.release();
+            return res.status(400).json({ message: 'Error al registrar la siembra' });
         }
 
         // Verificar que haya controles de tierra en la parcela
         const controlesTierraResult = await client.query(
             `SELECT COUNT(*) AS total 
-                FROM controles_tierra 
-                WHERE id_parcela = $1`,
+             FROM controles_tierra 
+             WHERE id_parcela = $1`,
             [id_parcela]
         );
 
-        if (controlesTierraResult.rows[0].total = 0) {
-            return res.status(400).send('No se puede registrar la siembra. La parcela no tiene controles de tierra.');
+        if (controlesTierraResult.rows[0].total == 0) {
+            client.release();
+            return res.status(400).json({ message: 'Error al registrar la siembra' });
         }
 
         // Registrar la nueva siembra
@@ -61,7 +72,7 @@ router.post('/', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) =>
         });
     } catch (error) {
         console.error('Error al registrar la siembra:', error);
-        res.status(500).send('Error al registrar la siembra');
+        res.status(500).json({ message: 'Error al registrar la siembra' });
     }
 });
 
@@ -71,6 +82,14 @@ router.put('/:id', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) 
     const { fecha_plantacion, cantidad_plantas, tecnica_siembra, observaciones_siembra } = req.body;
 
     try {
+        // Validación de los datos de entrada
+        if (
+            !fecha_plantacion || !cantidad_plantas || !tecnica_siembra || 
+            cantidad_plantas <= 0
+        ) {
+            return res.status(400).json({ message: 'Error al modificar los datos de siembra' });
+        }
+
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
@@ -83,10 +102,10 @@ router.put('/:id', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) 
         );
 
         client.release();
-        res.status(200).send({ message: 'Datos de siembra actualizados exitosamente' });
+        res.status(200).json({ message: 'Datos de siembra actualizados exitosamente' });
     } catch (error) {
         console.error('Error al modificar los datos de siembra:', error);
-        res.status(500).send('Error al modificar los datos de siembra');
+        res.status(500).json({ message: 'Error al modificar los datos de siembra' });
     }
 });
 
