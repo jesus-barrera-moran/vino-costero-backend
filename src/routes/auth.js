@@ -90,6 +90,17 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
   let client;
 
   try {
+    // Validación de campos requeridos
+    if (!username || !password || !nombre || !apellido || !correo || !roles.length) {
+      return res.status(400).json({ message: 'Error al registrar el usuario' });
+    }
+
+    // Validación del formato del correo electrónico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(correo)) {
+      return res.status(400).json({ message: 'Error al registrar el usuario' });
+    }
+
     // Desencriptar la contraseña recibida
     const decryptedPassword = decryptText(password); // Usar la función de desencriptación
 
@@ -178,7 +189,7 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
       client.release();
     }
     console.error('Error al crear el usuario:', error);
-    res.status(500).json({ message: 'Error al crear el usuario' });
+    res.status(500).json({ message: 'Error al registrar el usuario' });
   }
 });
 
