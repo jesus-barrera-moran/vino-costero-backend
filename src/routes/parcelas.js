@@ -5,9 +5,65 @@ const { verificarToken, verificarRol } = require('../middlewares/authMiddleware'
 
 // Ruta para crear una nueva parcela
 router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
-    const { nombre_parcela, ubicacion_descripcion, ubicacion_longitud, ubicacion_latitud, id_estado_parcela, dimensiones, control_tierra } = req.body;
+    const { 
+        nombre_parcela, 
+        ubicacion_descripcion, 
+        ubicacion_longitud, 
+        ubicacion_latitud, 
+        id_estado_parcela, 
+        dimensiones, 
+        control_tierra 
+    } = req.body;
 
     try {
+        // Validación de campos requeridos
+        if (!nombre_parcela || !ubicacion_descripcion || !ubicacion_longitud || !ubicacion_latitud || !id_estado_parcela) {
+            return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+        }
+
+        // Validación de rango de longitud y latitud
+        const longitud = parseFloat(ubicacion_longitud);
+        const latitud = parseFloat(ubicacion_latitud);
+        if (isNaN(longitud) || longitud < -180 || longitud > 180) {
+            return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+        }
+        if (isNaN(latitud) || latitud < -90 || latitud > 90) {
+            return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+        }
+
+        // Validación de dimensiones
+        if (dimensiones) {
+            const { superficie, longitud, anchura, pendiente } = dimensiones;
+
+            if (superficie <= 0) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+            if (longitud <= 0) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+            if (anchura <= 0) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+            if (pendiente < 0 || pendiente > 100) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+        }
+
+        // Validación de control de tierra
+        if (control_tierra) {
+            const { ph, humedad, temperatura } = control_tierra;
+
+            if (ph < 0 || ph > 14) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+            if (humedad < 0 || humedad > 100) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+            if (temperatura < -50 || temperatura > 100) {
+                return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            }
+        }
+
         const pool = await connectWithConnector('vino_costero_negocio');
         const client = await pool.connect();
 
@@ -23,7 +79,7 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
         if (parseInt(nombreParcelaResult.rows[0].count) > 0) {
             await client.query('ROLLBACK');
             client.release();
-            return res.status(400).send({ message: 'El nombre de la parcela ya existe'});
+            return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
         }
 
         // Crear la parcela
@@ -52,7 +108,7 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
         await client.query('COMMIT');
         client.release();
 
-        res.status(201).send({ message: 'Parcela creada exitosamente'});
+        res.status(201).send({ message: 'Parcela creada exitosamente' });
     } catch (error) {
         console.error('Error al crear la parcela:', error);
         
@@ -62,7 +118,7 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
             client.release();
         }
 
-        res.status(500).send('Error al crear la parcela');
+        res.status(500).send({ message: 'Hubo un error al procesar la solicitud' });
     }
 });
 
