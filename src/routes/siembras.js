@@ -83,7 +83,7 @@ router.put('/:id', verificarToken, verificarRol([1, 2, 3, 4]), async (req, res) 
         );
 
         client.release();
-        res.status(200).send('Datos de siembra actualizados exitosamente');
+        res.status(200).send({ message: 'Datos de siembra actualizados exitosamente' });
     } catch (error) {
         console.error('Error al modificar los datos de siembra:', error);
         res.status(500).send('Error al modificar los datos de siembra');
