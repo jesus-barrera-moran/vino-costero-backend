@@ -174,7 +174,7 @@ router.put('/:id', verificarToken, verificarRol([1, 3]), async (req, res) => {
         await client.query('COMMIT');
         client.release();
 
-        res.status(200).send('Parcela y dimensiones actualizadas exitosamente');
+        res.status(200).send({ message: 'Parcela y dimensiones actualizadas exitosamente'});
     } catch (error) {
         console.error('Error al modificar la parcela y las dimensiones:', error);
         await client.query('ROLLBACK'); // En caso de error, hacer rollback
