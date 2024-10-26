@@ -79,7 +79,7 @@ router.post('/', verificarToken, verificarRol([1, 3]), async (req, res) => {
         if (parseInt(nombreParcelaResult.rows[0].count) > 0) {
             await client.query('ROLLBACK');
             client.release();
-            return res.status(400).send({ message: 'Hubo un error al procesar la solicitud' });
+            return res.status(400).send({ message: 'El nombre de la parcela ya existe' });
         }
 
         // Crear la parcela
