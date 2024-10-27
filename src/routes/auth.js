@@ -173,7 +173,7 @@ router.post('/register', verificarToken, verificarRol([1]), async (req, res) => 
         [newUserId, roleId]
       );
     }
- 
+
     // Generar un token JWT para el nuevo usuario
     const token = jwt.sign({ username, roles }, SECRET_KEY, { expiresIn: '1h' });
 
